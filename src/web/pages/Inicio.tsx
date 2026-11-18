@@ -2,7 +2,7 @@ import { useState } from "react";
 import { api, type Estado } from "../lib/api.ts";
 import { Escolha, NOME_CEREBRO, type Cerebro } from "./Escolha.tsx";
 
-type Aba = "inicio" | "fontes" | "radar" | "momentos" | "fila" | "caderno" | "ideias" | "ajustes";
+type Aba = "inicio" | "fontes" | "aovivo" | "radar" | "momentos" | "fila" | "caderno" | "ideias" | "ajustes";
 
 interface Passo { n: number; aba: Aba; nome: string; faz: string; quem: "voce" | "painel" | "claude" | "codex"; conta: number; rotulo: string }
 

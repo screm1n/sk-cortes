@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type Estado } from "./lib/api.ts";
 import { Inicio } from "./pages/Inicio.tsx";
 import { Fontes } from "./pages/Fontes.tsx";
+import { AoVivo } from "./pages/AoVivo.tsx";
 import { Radar } from "./pages/Radar.tsx";
 import { Momentos } from "./pages/Momentos.tsx";
 import { Fila } from "./pages/Fila.tsx";
@@ -9,7 +10,7 @@ import { Caderno } from "./pages/Caderno.tsx";
 import { Ideias } from "./pages/Ideias.tsx";
 import { Ajustes } from "./pages/Ajustes.tsx";
 
-type Aba = "inicio" | "fontes" | "radar" | "momentos" | "fila" | "caderno" | "ideias" | "ajustes";
+type Aba = "inicio" | "fontes" | "aovivo" | "radar" | "momentos" | "fila" | "caderno" | "ideias" | "ajustes";
 
 interface Item { id: Aba; rotulo: string; passo?: number; conta?: (e: Estado) => number }
 
@@ -20,6 +21,7 @@ const GRUPOS: { titulo: string | null; itens: Item[] }[] = [
     titulo: "Produção",
     itens: [
       { id: "fontes", rotulo: "Streamers", passo: 1 },
+      { id: "aovivo", rotulo: "Ao vivo", conta: (e) => e.aoVivo?.marcasNovas ?? 0 },
       { id: "radar", rotulo: "Radar", passo: 2, conta: (e) => e.contagens.novos + e.contagens.aguardandoClaude },
       { id: "momentos", rotulo: "Momentos", passo: 3, conta: (e) => e.contagens.momentos },
       { id: "fila", rotulo: "Fila de postagem", passo: 4, conta: (e) => e.contagens.prontos },
@@ -122,6 +124,7 @@ export function App() {
         {aba === "radar" && <Radar versao={versao} estado={estado} aoMudar={atualizar} editar={editar} />}
         {aba === "momentos" && <Momentos versao={versao} marca={marca} aoMudar={atualizar} irFila={() => ir("fila")} abrir={abrirMomento} aoAbrir={() => setAbrirMomento(null)} />}
         {aba === "fila" && <Fila versao={versao} aoMudar={atualizar} />}
+        {aba === "aovivo" && <AoVivo editar={editar} />}
         {aba === "fontes" && <Fontes aoMudar={atualizar} irRadar={() => ir("radar")} />}
         {aba === "caderno" && <Caderno versao={versao} aoMudar={atualizar} />}
         {aba === "ideias" && <Ideias />}

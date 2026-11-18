@@ -28,6 +28,10 @@ Banco e midia ficam em `~/.sk-cortes/`, fora do OneDrive de proposito.
    dividida, fundo desfocado, tela cheia), caixas arrastaveis pra camera do streamer e pro jogo,
    previa 9:16 ao vivo e correcao das falas. Marque varios pra compilacao de 61 s ou mais (o TikTok
    so paga video com mais de 1 minuto).
+- **Ao vivo** (clipar live em andamento): grava os ultimos 10 a 60 min da live em pedacos de 4 s,
+  acende "momento quente" quando o chat da Twitch explode de risada ou o audio da um pico (grito),
+  e "Clipar e editar" / "Ultimos 30 s" junta o trecho e abre no editor. Precisa do painel rodando
+  o tempo todo: use `npm run dev` num terminal, nao o preview do Claude (que fecha entre sessoes).
 5. **Fila**: baixa o mp4, copia a legenda, posta. Depois cola link e views.
 6. **Caderno**: cola video de quem ensina a ganhar dinheiro com GTA 6 e roda `/sk-cortes aprender`.
    As taticas viram proposta de regra nova.

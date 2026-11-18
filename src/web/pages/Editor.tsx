@@ -263,7 +263,20 @@ export function Editor({ momento: m, marca, aoFechar, aoSalvar }: {
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
 
-  useEffect(() => { api.frases(m.id).then(setFrases).catch(() => {}); }, [m.id]);
+  // Corte recem-criado (clip ao vivo, corte na mao) abre antes da transcricao terminar:
+  // continua perguntando por ate 5 minutos ate as falas aparecerem.
+  useEffect(() => {
+    let vivo = true;
+    let tentativas = 0;
+    const buscar = async () => {
+      const fs = await api.frases(m.id).catch(() => [] as Frase[]);
+      if (!vivo) return;
+      if (fs.length) { setFrases((atuais) => (atuais.length ? atuais : fs)); return; }
+      if (++tentativas < 60) setTimeout(buscar, 5000);
+    };
+    void buscar();
+    return () => { vivo = false; };
+  }, [m.id]);
 
   const g = useMemo(
     () => calcular(layout === "facecam" && !edicao.cam ? "desfocado" : layout, dims.w, dims.h, edicao),

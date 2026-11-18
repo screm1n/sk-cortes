@@ -52,6 +52,19 @@ export interface Estado {
   };
   jobs: Job[];
   ajustes: Record<string, string>;
+  aoVivo?: { gravando: number; marcasNovas: number };
+}
+
+export interface Marca {
+  id: number; t: number; tipo: "chat" | "grito" | "manual"; forca: number; detalhe: string;
+  em: number; status: "nova" | "clipada" | "ignorada"; momentoId: number | null;
+}
+
+export interface Live {
+  id: number; url: string; canal: string; plataforma: string;
+  status: "conectando" | "gravando" | "offline" | "parado" | "erro"; erro: string | null;
+  iniciadaEm: number; gravado: number; agora: number; bufferSeg: number; chatMsgs: number; chatAtivo: boolean;
+  marcas: Marca[];
 }
 
 async function req<T>(metodo: string, url: string, corpo?: unknown): Promise<T> {
@@ -88,6 +101,13 @@ export const api = {
   descartar: (id: number) => req<Video>("POST", `/api/videos/${id}/descartar`),
   corteManual: (videoId: number) => req<Momento>("POST", `/api/videos/${videoId}/corte-manual`),
   acharCam: (videoId: number) => req<{ cam: Rect | null }>("POST", `/api/videos/${videoId}/achar-cam`),
+
+  lives: () => req<Live[]>("GET", "/api/aovivo"),
+  gravarLive: (b: { url: string; fonteId?: number | null; bufferMin?: number }) => req<{ id: number }>("POST", "/api/aovivo", b),
+  pararLive: (id: number, apagar = false) => req("POST", `/api/aovivo/${id}/parar`, { apagar }),
+  marcarAgora: (id: number) => req<Marca>("POST", `/api/aovivo/${id}/marcar`),
+  ignorarMarca: (id: number, marca: number) => req("POST", `/api/aovivo/${id}/marcas/${marca}/ignorar`),
+  cliparLive: (id: number, b: { marcaId?: number; ultimos?: number }) => req<{ momentoId: number }>("POST", `/api/aovivo/${id}/clipar`, b),
 
   momentos: (status?: string) => req<Momento[]>("GET", `/api/momentos${status ? `?status=${status}` : ""}`),
   editarMomento: (id: number, b: EdicaoMomento) => req<Momento>("PATCH", `/api/momentos/${id}`, b),

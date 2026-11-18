@@ -7,6 +7,7 @@ import { cancelar, listJobs } from "./jobs/runner.ts";
 import { jobCompilacao, jobCurto, jobDica } from "./fabrica/render.ts";
 import { plataformaDaUrl, segundos } from "./ferramentas/ytdlp.ts";
 import { config } from "./config.ts";
+import * as aovivo from "./aovivo/gravador.ts";
 import { EdicaoZ, Frase } from "./momentos.ts";
 import { lerTranscricao } from "./ferramentas/midia.ts";
 import { rodarOk } from "./ferramentas/processo.ts";
@@ -43,7 +44,59 @@ export async function rotas(app: FastifyInstance): Promise<void> {
     reply.code(status).send({ erro: msg });
   });
 
-  app.get("/api/estado", async () => ({ contagens: repo.contagens(), jobs: listJobs(15), ajustes: repo.ajustes() }));
+  app.get("/api/estado", async () => {
+    const lives = aovivo.resumo();
+    return {
+      contagens: repo.contagens(), jobs: listJobs(15), ajustes: repo.ajustes(),
+      aoVivo: {
+        gravando: lives.filter((l) => l.status === "gravando").length,
+        marcasNovas: lives.reduce((s, l) => s + l.marcas.filter((m) => m.status === "nova").length, 0),
+      },
+    };
+  });
+
+  /* -------------------------------------------------------------- ao vivo */
+  app.get("/api/aovivo", async () => aovivo.resumo());
+  app.post("/api/aovivo", async (req) => {
+    const b = z.object({
+      url: z.string().trim().url(), fonteId: z.number().int().nullable().optional(),
+      bufferMin: z.number().min(5).max(120).optional(),
+    }).parse(req.body);
+    const l = aovivo.iniciar(b.url, { fonteId: b.fonteId ?? null, bufferMin: b.bufferMin });
+    return { id: l.id };
+  });
+  app.post("/api/aovivo/:id/parar", async (req) => {
+    const { apagar } = z.object({ apagar: z.boolean().optional() }).parse(req.body ?? {});
+    aovivo.parar(Id.parse(req.params).id, apagar);
+    return { ok: true };
+  });
+  app.post("/api/aovivo/:id/marcar", async (req) => aovivo.marcarAgora(Id.parse(req.params).id));
+  app.post("/api/aovivo/:id/marcas/:marca/ignorar", async (req) => {
+    const p = z.object({ id: z.coerce.number().int(), marca: z.coerce.number().int() }).parse(req.params);
+    aovivo.ignorar(p.id, p.marca);
+    return { ok: true };
+  });
+  /** Corpo: {marcaId} (30 s antes ate 8 s depois da marca), {ultimos: s} ou {de, ate} em tempo de gravacao. */
+  app.post("/api/aovivo/:id/clipar", async (req) => {
+    const { id } = Id.parse(req.params);
+    const b = z.object({
+      marcaId: z.number().int().optional(), ultimos: z.number().min(5).max(600).optional(),
+      de: z.number().optional(), ate: z.number().optional(),
+    }).parse(req.body);
+    const live = aovivo.resumo().find((l) => l.id === id);
+    if (!live) throw new Error("gravação não existe");
+    let de: number, ate: number;
+    if (b.marcaId) {
+      const m = live.marcas.find((x) => x.id === b.marcaId);
+      if (!m) throw new Error("marca não existe");
+      de = m.t - 30; ate = m.t + 8;
+    } else if (b.ultimos) {
+      ate = live.agora; de = ate - b.ultimos;
+    } else if (b.de !== undefined && b.ate !== undefined) {
+      de = b.de; ate = b.ate;
+    } else throw new Error("diga o trecho: marcaId, ultimos ou de/ate");
+    return { momentoId: await aovivo.clipar(id, de, ate, b.marcaId) };
+  });
   app.post("/api/jobs/:id/cancelar", async (req) => ({ ok: cancelar(Id.parse(req.params).id) }));
 
   /* --------------------------------------------------------------- fontes */

@@ -84,7 +84,8 @@ export function explicar(msg: string): string {
 }
 
 /** So transcreve de novo (ex.: trocou o idioma da fonte). */
-export function jobTranscrever(videoId: number): Job {
+/** `statusFinal` "analisado" = video que ja tem corte (ex.: clip ao vivo), nao deve cair em "esperando os momentos". */
+export function jobTranscrever(videoId: number, statusFinal: "transcrito" | "analisado" = "transcrito"): Job {
   const v = repo.getVideo(videoId);
   if (!v?.arquivo) throw new Error("video ainda nao foi baixado");
   repo.editarVideo(v.id, { status: "transcrevendo", erro: null });
@@ -94,7 +95,7 @@ export function jobTranscrever(videoId: number): Job {
       const saida = join(config.pastas.transcricoes, `${v.id}.json`);
       const t = await transcrever(v.arquivo!, saida, fonte?.idioma ?? null, (f) =>
         ctx.progresso(Math.round(f * 100), 100, `transcrevendo ${Math.round(f * 100)}%`));
-      repo.editarVideo(v.id, { transcricao: saida, idioma: t.idioma, status: "transcrito" });
+      repo.editarVideo(v.id, { transcricao: saida, idioma: t.idioma, status: statusFinal });
       return { segmentos: t.segmentos.length };
     } catch (e) {
       repo.editarVideo(v.id, { status: "erro", erro: e instanceof Error ? e.message : String(e) });

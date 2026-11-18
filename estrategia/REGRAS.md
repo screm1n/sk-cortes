@@ -45,13 +45,21 @@ Lancamento: 19/11/2026. Reels e TikTok ao mesmo tempo, mesmo video.
   monetizam (o TikTok so paga video com mais de 1 minuto).
 - Dica narrada: 45 a 75 s, uma dica so, gancho com numero ou segredo, chamada no fim pra seguir
   ("tem mais segredo amanha").
+- Terceira rede, o X: testar o clipe nativo deles (pega um momento de qualquer video, a gente poe a
+  opiniao e posta sem sair do X, creditando e linkando o original). Antes de investir tempo, conferir
+  se a conta e elegivel ao pagamento de la. Os numeros de ganho do texto de origem nao foram provados.
 
 ## 6. Funil pro low ticket (depois do lancamento)
 
 - O guia GTA 6 nasce do que os streamers descobrirem: toda transcricao com rota de dinheiro,
   segredo ou local escondido vai pra uma lista no caderno.
 - CTA do guia so depois que o perfil tiver dicas postadas (autoridade antes de vender).
+- Formato do guia: perguntas frequentes de GTA 6 em portugues ("como ganhar dinheiro no GTA 6?",
+  "como fazer X?"), cada resposta tirada de transcricao de streamer. Alinha com o que as pessoas
+  buscam. Site novo demora meses pra ranquear, entao o guia vende pelo perfil, nao pela busca.
 
 ## Historico de mudancas
 
 - 10/11/2026: versao inicial, montada no plano do projeto.
+- 13/11/2026: secao 5 ganha o X como terceira rede (clipe nativo) e a secao 6 ganha o formato de
+  perguntas frequentes pro guia. Origem: artigo de Miles Deutscher (caderno/miles-deutscher-gta6.md).
