@@ -57,13 +57,14 @@ export interface Estado {
 
 export interface Marca {
   id: number; t: number; tipo: "chat" | "grito" | "manual"; forca: number; detalhe: string;
-  em: number; status: "nova" | "clipada" | "ignorada"; momentoId: number | null;
+  em: number; status: "nova" | "clipando" | "clipada" | "ignorada"; momentoId: number | null; erro?: string | null;
 }
 
 export interface Live {
   id: number; url: string; canal: string; plataforma: string;
   status: "conectando" | "gravando" | "offline" | "parado" | "erro"; erro: string | null;
   iniciadaEm: number; gravado: number; agora: number; bufferSeg: number; chatMsgs: number; chatAtivo: boolean;
+  autoClip: boolean; bufferMb: number;
   marcas: Marca[];
 }
 
@@ -102,8 +103,9 @@ export const api = {
   corteManual: (videoId: number) => req<Momento>("POST", `/api/videos/${videoId}/corte-manual`),
   acharCam: (videoId: number) => req<{ cam: Rect | null }>("POST", `/api/videos/${videoId}/achar-cam`),
 
-  lives: () => req<Live[]>("GET", "/api/aovivo"),
-  gravarLive: (b: { url: string; fonteId?: number | null; bufferMin?: number }) => req<{ id: number }>("POST", "/api/aovivo", b),
+  lives: () => req<{ lives: Live[]; discoLivreGb: number | null }>("GET", "/api/aovivo"),
+  configurarLive: (id: number, b: { autoClip?: boolean }) => req("PATCH", `/api/aovivo/${id}`, b),
+  gravarLive: (b: { url: string; fonteId?: number | null; bufferMin?: number; autoClip?: boolean }) => req<{ id: number }>("POST", "/api/aovivo", b),
   pararLive: (id: number, apagar = false) => req("POST", `/api/aovivo/${id}/parar`, { apagar }),
   marcarAgora: (id: number) => req<Marca>("POST", `/api/aovivo/${id}/marcar`),
   ignorarMarca: (id: number, marca: number) => req("POST", `/api/aovivo/${id}/marcas/${marca}/ignorar`),

@@ -36,6 +36,8 @@ export function AoVivo({ editar }: { editar: (momentoId: number) => void }) {
   const [fontes, setFontes] = useState<Fonte[]>([]);
   const [url, setUrl] = useState("");
   const [buffer, setBuffer] = useState(20);
+  const [auto, setAuto] = useState(true);
+  const [disco, setDisco] = useState<number | null>(null);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [erro, setErro] = useState("");
   const [som, setSom] = useState(() => { try { return localStorage.getItem("skc-som") !== "0"; } catch { return true; } });
@@ -43,7 +45,9 @@ export function AoVivo({ editar }: { editar: (momentoId: number) => void }) {
 
   const carregar = async () => {
     try {
-      const ls = await api.lives();
+      const r = await api.lives();
+      const ls = r.lives;
+      setDisco(r.discoLivreGb);
       // Bipe so pra marca automatica nova (a primeira leitura so registra o que ja existe).
       const ids = ls.flatMap((l) => l.marcas.filter((m) => m.tipo !== "manual").map((m) => m.id));
       if (vistas.current && som && ids.some((id) => !vistas.current!.has(id))) bipe();
@@ -68,7 +72,7 @@ export function AoVivo({ editar }: { editar: (momentoId: number) => void }) {
   const clipar = (l: Live, b: { marcaId?: number; ultimos?: number }, chave: string) =>
     acao(chave, async () => { const r = await api.cliparLive(l.id, b); editar(r.momentoId); });
 
-  const gravar = (u: string, fonteId?: number) => acao("gravar", () => api.gravarLive({ url: u, fonteId, bufferMin: buffer }));
+  const gravar = (u: string, fonteId?: number) => acao("gravar", () => api.gravarLive({ url: u, fonteId, bufferMin: buffer, autoClip: auto }));
 
   const ativas = lives.filter((l) => l.status !== "parado");
   const paradas = lives.filter((l) => l.status === "parado");
@@ -90,6 +94,7 @@ export function AoVivo({ editar }: { editar: (momentoId: number) => void }) {
             <option value={30}>30 min</option><option value={60}>60 min</option>
           </select>
         </label>
+        <label className="check"><input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} /> Clipar sozinho</label>
         <button className="btn btn-forte" disabled={ocupado === "gravar"}>{ocupado === "gravar" ? "Conectando…" : "Começar a gravar"}</button>
       </form>
 
@@ -97,7 +102,7 @@ export function AoVivo({ editar }: { editar: (momentoId: number) => void }) {
         <div className="filtros">
           <span className="sutil">Seus streamers:</span>
           {fontes.map((f) => (
-            <button key={f.id} className="chip" disabled={!!ativas.find((l) => l.url === f.url)} onClick={() => gravar(f.url, f.id)}>
+            <button key={f.id} className="chip" disabled={!!ativas.find((l) => l.url === f.url)} onClick={() => void gravar(f.url, f.id)}>
               {ativas.find((l) => l.url === f.url) ? `● ${f.nome}` : `+ ${f.nome}`}
             </button>
           ))}
@@ -109,6 +114,12 @@ export function AoVivo({ editar }: { editar: (momentoId: number) => void }) {
       )}
 
       {erro && <div className="alerta alerta-erro">{erro}</div>}
+      {disco !== null && disco < 10 && (
+        <div className="alerta alerta-erro">
+          Só {disco.toLocaleString("pt-BR")} GB livres no disco. Cada live gravando usa uns 25 MB por minuto de buffer, e cada clip mais 20 a 40 MB.
+          {disco < 3 ? " Com isso a gravação pode parar no meio: libere espaço antes." : " Prefira buffer de 10 a 20 min e apague vídeos que não vai usar."}
+        </div>
+      )}
 
       {ativas.length === 0 && (
         <div className="vazio">Nenhuma live sendo gravada. Cole o link do canal ou clique num streamer acima quando ele entrar ao vivo.</div>
@@ -125,7 +136,7 @@ export function AoVivo({ editar }: { editar: (momentoId: number) => void }) {
                   <b>{l.canal}</b> <span className="etiqueta">{l.plataforma}</span>
                   <div className="sutil">
                     <span>{l.status === "gravando" ? "gravando" : l.status === "conectando" ? "conectando…" : "fora do ar"}</span>
-                    <span>{tempo(l.gravado)} no buffer (guarda {Math.round(l.bufferSeg / 60)} min)</span>
+                    <span>{tempo(l.gravado)} no buffer (guarda {Math.round(l.bufferSeg / 60)} min, ocupando {l.bufferMb} MB)</span>
                     {l.chatAtivo && <span>{l.chatMsgs} msgs no chat</span>}
                     <span><a href={l.url} target="_blank" rel="noreferrer">abrir a live</a></span>
                   </div>
@@ -137,6 +148,11 @@ export function AoVivo({ editar }: { editar: (momentoId: number) => void }) {
                 </div>
               </div>
               {l.erro && l.status !== "gravando" && <div className="sutil live-erro">{l.erro}</div>}
+
+              <label className="check auto-clip">
+                <input type="checkbox" checked={l.autoClip} onChange={(e) => acao(`c${l.id}`, () => api.configurarLive(l.id, { autoClip: e.target.checked }))} />
+                <span><b>Clipar sozinho</b> cada momento quente vira um corte na aba Momentos, pronto pra você editar e postar</span>
+              </label>
 
               <div className="clipar-agora">
                 <span>Clipar o que acabou de rolar:</span>
@@ -160,7 +176,10 @@ export function AoVivo({ editar }: { editar: (momentoId: number) => void }) {
                         {m.tipo !== "manual" && <span className="quente-detalhe">{m.detalhe}</span>}
                       </div>
                       <div className="acoes">
-                        {m.status === "clipada" && m.momentoId ? (
+                        {m.erro && <span className="sutil live-erro">{m.erro}</span>}
+                        {m.status === "clipando" ? (
+                          <span className="sutil">Clipando…</span>
+                        ) : m.status === "clipada" && m.momentoId ? (
                           <button className="btn" onClick={() => editar(m.momentoId!)}>Abrir corte</button>
                         ) : (
                           <>

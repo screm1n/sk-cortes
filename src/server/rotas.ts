@@ -56,13 +56,17 @@ export async function rotas(app: FastifyInstance): Promise<void> {
   });
 
   /* -------------------------------------------------------------- ao vivo */
-  app.get("/api/aovivo", async () => aovivo.resumo());
+  app.get("/api/aovivo", async () => ({ lives: aovivo.resumo(), discoLivreGb: aovivo.discoLivreGb() }));
+  app.patch("/api/aovivo/:id", async (req) => {
+    aovivo.configurar(Id.parse(req.params).id, z.object({ autoClip: z.boolean().optional() }).parse(req.body));
+    return { ok: true };
+  });
   app.post("/api/aovivo", async (req) => {
     const b = z.object({
       url: z.string().trim().url(), fonteId: z.number().int().nullable().optional(),
-      bufferMin: z.number().min(5).max(120).optional(),
+      bufferMin: z.number().min(5).max(120).optional(), autoClip: z.boolean().optional(),
     }).parse(req.body);
-    const l = aovivo.iniciar(b.url, { fonteId: b.fonteId ?? null, bufferMin: b.bufferMin });
+    const l = aovivo.iniciar(b.url, { fonteId: b.fonteId ?? null, bufferMin: b.bufferMin, autoClip: b.autoClip });
     return { id: l.id };
   });
   app.post("/api/aovivo/:id/parar", async (req) => {

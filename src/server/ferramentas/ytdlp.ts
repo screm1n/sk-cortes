@@ -171,16 +171,24 @@ export async function baixar(
   // Video e audio vem em dois downloads seguidos; a barra soma os dois.
   let passada = 0;
   let ultimo = 0;
-  await rodarOk(config.ytdlp, argsDownload(url, alvo, opcoes), {
-    linha: (l) => {
-      const m = l.match(/\[download\]\s+([\d.]+)%/);
-      if (!m || !opcoes.progresso) return;
-      const pct = Number(m[1]);
-      if (pct < ultimo - 50) passada = 1;
-      ultimo = pct;
-      opcoes.progresso(opcoes.soAudio ? pct : passada === 0 ? pct * 0.9 : 90 + pct * 0.1, local ? "baixando o video inteiro" : "baixando");
-    },
-  });
+  try {
+    await rodarOk(config.ytdlp, argsDownload(url, alvo, opcoes), {
+      linha: (l) => {
+        const m = l.match(/\[download\]\s+([\d.]+)%/);
+        if (!m || !opcoes.progresso) return;
+        const pct = Number(m[1]);
+        if (pct < ultimo - 50) passada = 1;
+        ultimo = pct;
+        opcoes.progresso(opcoes.soAudio ? pct : passada === 0 ? pct * 0.9 : 90 + pct * 0.1, local ? "baixando o video inteiro" : "baixando");
+      },
+    });
+  } catch (e) {
+    // Download que falha deixa pedacos (.f298.mp4, .temp.mp4, .part) que podem passar de 2 GB.
+    const pasta = dirname(alvo);
+    const base = alvo.slice(pasta.length + 1);
+    for (const f of readdirSync(pasta)) if (f.startsWith(base + ".")) rmSync(join(pasta, f), { force: true });
+    throw e;
+  }
   const baixado = arquivoBaixado(alvo);
   if (!local) return baixado;
 

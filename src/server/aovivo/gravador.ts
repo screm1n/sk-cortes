@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, statfsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { config } from "../config.ts";
 import * as repo from "../db/repo.ts";
@@ -26,7 +26,8 @@ export interface Marca {
   forca: number;
   detalhe: string;
   em: number;
-  status: "nova" | "clipada" | "ignorada";
+  status: "nova" | "clipando" | "clipada" | "ignorada";
+  erro?: string | null;
   momentoId: number | null;
 }
 
@@ -40,6 +41,8 @@ interface Live {
   fonteId: number | null;
   pasta: string;
   bufferSeg: number;
+  /** Clipa sozinho cada momento quente assim que o trecho termina de gravar. */
+  autoClip: boolean;
   status: "conectando" | "gravando" | "offline" | "parado" | "erro";
   erro: string | null;
   iniciadaEm: number;
@@ -61,6 +64,10 @@ interface Live {
 }
 
 const lives = new Map<number, Live>();
+
+// Gravacao vive em memoria: se o painel reiniciou, os buffers de antes ficaram orfaos.
+// Os clipes ja feitos estao em videos/, entao apagar aqui nao perde nada.
+rmSync(join(config.dados, "aovivo"), { recursive: true, force: true });
 let proximoId = 1;
 let proximaMarca = 1;
 
@@ -191,7 +198,7 @@ function ligarChat(l: Live): void {
 
 /* ------------------------------------------------------------------ publico */
 
-export function iniciar(url: string, opcoes: { fonteId?: number | null; bufferMin?: number } = {}): Live {
+export function iniciar(url: string, opcoes: { fonteId?: number | null; bufferMin?: number; autoClip?: boolean } = {}): Live {
   const ja = [...lives.values()].find((l) => l.url === url && l.status !== "parado");
   if (ja) return ja;
   const id = proximoId++;
@@ -199,7 +206,7 @@ export function iniciar(url: string, opcoes: { fonteId?: number | null; bufferMi
   mkdirSync(pasta, { recursive: true });
   const l: Live = {
     id, url, canal: canalDaLive(url), plataforma: plataformaDaUrl(url), fonteId: opcoes.fonteId ?? null, pasta,
-    bufferSeg: Math.round((opcoes.bufferMin ?? 20) * 60), status: "conectando", erro: null, iniciadaEm: Date.now(),
+    bufferSeg: Math.round((opcoes.bufferMin ?? 20) * 60), autoClip: opcoes.autoClip ?? true, status: "conectando", erro: null, iniciadaEm: Date.now(),
     rodada: 0, offsetRodada: 0, lidasRodada: 0, pedacos: [], ultimoFim: 0, ultimoFimEm: Date.now(), marcas: [],
     proc: null, chat: null, chatMsgs: 0, detectorChat: new DetectorChat(), detectorAudio: new DetectorAudio(),
     fila: Promise.resolve(), timer: null, religar: null,
@@ -209,6 +216,7 @@ export function iniciar(url: string, opcoes: { fonteId?: number | null; bufferMi
     try { lerPedacos(l); } catch { /* arquivo sendo escrito, tenta no proximo giro */ }
     const pico = l.detectorChat.verificar(Date.now());
     if (pico) novaMarca(l, agoraT(l, pico.em) - ATRASO_CHAT_S, "chat", pico.forca, pico.detalhe);
+    if (l.autoClip) autoClipar(l);
   }, 2000);
   void ligar(l);
   ligarChat(l);
@@ -229,6 +237,50 @@ export function parar(id: number, apagar = false): void {
   }
 }
 
+/* -------------------------------------------------------- clipar sozinho */
+
+/** Folga depois da marca: o clip so sai quando esse trecho ja foi gravado. */
+const DEPOIS_S = 8;
+const ANTES_S = 30;
+/** Duas marcas a menos disso sao o mesmo lance (chat e grito juntos, por exemplo). */
+const MESMO_LANCE_S = 20;
+
+let clipando = false;
+
+function autoClipar(l: Live): void {
+  if (clipando) return; // um por vez: o ffmpeg do clip disputa disco com a gravacao
+  const prontas = l.marcas
+    .filter((m) => m.status === "nova" && agoraT(l) >= m.t + DEPOIS_S + PEDACO_S)
+    .sort((a, b) => a.t - b.t);
+  const m = prontas[0];
+  if (!m) return;
+  const irma = l.marcas.find((x) => x !== m && x.status === "clipada" && Math.abs(x.t - m.t) < MESMO_LANCE_S);
+  if (irma) { m.status = "clipada"; m.momentoId = irma.momentoId; return; }
+  clipando = true;
+  m.status = "clipando";
+  clipar(l.id, m.t - ANTES_S, m.t + DEPOIS_S, m.id)
+    .catch((e) => { m.status = "nova"; m.erro = e instanceof Error ? e.message : String(e); l.autoClip = false; })
+    .finally(() => { clipando = false; });
+}
+
+export function configurar(id: number, campos: { autoClip?: boolean }): void {
+  const l = lives.get(id);
+  if (!l) throw new Error("gravação não existe");
+  if (campos.autoClip !== undefined) l.autoClip = campos.autoClip;
+}
+
+function tamanho(arquivo: string): number {
+  try { return statSync(arquivo).size; } catch { return 0; }
+}
+
+/** Espaco livre no disco onde ficam as gravacoes (em GB). */
+export function discoLivreGb(): number | null {
+  try {
+    const s = statfsSync(config.dados);
+    return Math.round((s.bavail * s.bsize) / 1073741824 * 10) / 10;
+  } catch { return null; }
+}
+
 export function marcarAgora(id: number): Marca {
   const l = lives.get(id);
   if (!l) throw new Error("gravação não existe");
@@ -245,7 +297,8 @@ export function resumo() {
   return [...lives.values()].map((l) => ({
     id: l.id, url: l.url, canal: l.canal, plataforma: l.plataforma, status: l.status, erro: l.erro,
     iniciadaEm: l.iniciadaEm, gravado: Math.round(l.pedacos.length ? l.ultimoFim - l.pedacos[0]!.ini : 0),
-    agora: Math.round(agoraT(l)), bufferSeg: l.bufferSeg, chatMsgs: l.chatMsgs,
+    agora: Math.round(agoraT(l)), bufferSeg: l.bufferSeg, chatMsgs: l.chatMsgs, autoClip: l.autoClip,
+    bufferMb: Math.round(l.pedacos.reduce((s, p) => s + tamanho(p.arquivo), 0) / 1048576),
     chatAtivo: l.plataforma === "twitch", marcas: l.marcas,
   }));
 }
@@ -289,7 +342,7 @@ export async function clipar(id: number, de: number, ate: number, marcaId?: numb
     hashtags: repo.ajustes().hashtags ?? null, legendas: null, layout: cam ? "facecam" : "desfocado",
     porque: marca ? `clip ao vivo (${marca.tipo}: ${marca.detalhe})` : "clip ao vivo", edicao: null,
   });
-  if (marca) { marca.status = "clipada"; marca.momentoId = m.id; }
+  if (marca) { marca.status = "clipada"; marca.momentoId = m.id; marca.erro = null; }
   // Legenda vem da transcricao, que roda depois sem prender o editor.
   jobTranscrever(video.id, "analisado");
   return m.id;
